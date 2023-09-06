@@ -33,3 +33,36 @@ struct PlayMode : Mode {
 
 	PPU466 ppu;
 };
+
+// Store whether it is solid
+// Maybe store the item location?
+struct Background_Meta{
+	std::vector<std::vector<bool>> solid_bool;
+
+	Background_Meta();
+};
+
+
+struct Sprite_Load_Data{
+	PPU466::Palette current_pallete;
+	PPU466::Tile current_tile;
+	uint8_t type;
+};
+
+enum Sprite_Type{
+	Main,
+	Mouse_Normal,
+	Mouse_Boss,
+
+	Portal,
+	Apple,
+	Battery,
+	Bomb
+};
+
+
+// Store other information for a sprite
+struct Sprite_Meta{
+	Sprite_Type type;
+	float speed;
+};

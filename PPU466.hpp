@@ -52,6 +52,7 @@ struct PPU466 {
 	//   each bit in a row corresponds to a pixel in increasing order:
 	//      [ b0 b1 b2 b3 b4 b5 b6 b7 ]
 	//
+	// Pixel(x,y) means row y, column x
 	// For example, to read the color index at pixel (2,7):
 	//  bit0_at_2_7 = (tile.bit0[7] >> 2) & 1;
 	//  bit1_at_2_7 = (tile.bit1[7] >> 2) & 1;
