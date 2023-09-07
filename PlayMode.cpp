@@ -248,6 +248,19 @@ PlayMode::PlayMode() {
 
 	//Other moving sprites?
 
+	// Just add one for fun:)
+	// Sprite[53] a mouse
+
+	auto type = Mouse_Boss;
+	ppu.sprites[53].index = type_tile_map[type];
+	attr = 0;
+	attr = attr | type_palette_map[type];
+	ppu.sprites[53].attributes = attr;
+	sprite_infos[53]->is_item = false;
+	sprite_infos[53]->type = type;
+	sprite_infos[53]->loc_x = 400;
+	sprite_infos[53]->loc_y = 376; // On the third floor
+
 }
 
 PlayMode::~PlayMode() {
@@ -272,6 +285,10 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 			down.downs += 1;
 			down.pressed = true;
 			return true;
+		} else if (evt.key.keysym.sym == SDLK_SPACE){
+			space.downs += 1;
+			space.pressed = true;
+			return true;
 		}
 	} else if (evt.type == SDL_KEYUP) {
 		if (evt.key.keysym.sym == SDLK_LEFT) {
@@ -285,6 +302,9 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 			return true;
 		} else if (evt.key.keysym.sym == SDLK_DOWN) {
 			down.pressed = false;
+			return true;
+		}else if (evt.key.keysym.sym == SDLK_SPACE){
+			space.pressed = false;
 			return true;
 		}
 	}
@@ -319,6 +339,11 @@ void PlayMode::update(float elapsed) {
 
 	// Timer needed before assigning speed, or check_result[3] will directly make speed 0
 	update_jump_timer(elapsed,check_result[3]);
+
+	if (space.pressed){
+        bg_at.y -= 80.0 * elapsed;
+		real_position.y += 80.0 * elapsed;
+	}
 
 	if (up.pressed && !check_result[2]){
 		// Not in jump state
@@ -358,6 +383,7 @@ void PlayMode::update(float elapsed) {
 
 
 	update_timer(elapsed);
+	update_sprite_loc(elapsed);
 
 	crop_real_position();
 
@@ -366,8 +392,9 @@ void PlayMode::update(float elapsed) {
 	//reset button press counters:
 	left.downs = 0;
 	right.downs = 0;
-	up.downs = 0;
+	up.downs = 0; 
 	down.downs = 0;
+	space.downs = 0;
 }
 
 void PlayMode::draw(glm::uvec2 const &drawable_size) {
@@ -466,7 +493,7 @@ void PlayMode::handle_items(){
 	bool break_flag = false;
 	// Showing items..
 	// Handling buff/teleport
-	for(auto i = 54; i < 64; i++){
+	for(auto i = 53; i < 64; i++){
 
 		if(break_flag){
 			break;
@@ -498,7 +525,7 @@ void PlayMode::handle_items(){
 			auto tmp_x = (int)test_x - (int)ppu.ScreenWidth / 2;
 			auto tmp_y = (int)test_y - (int)ppu.ScreenHeight / 2;
 
-			// If it is disabled
+			// If it is disabled. Only for portal use
 			if (item_sprite->is_disabled){
 				//display the item. Don't care the hit
 				ppu.sprites[i].x = test_x;
@@ -559,6 +586,7 @@ void PlayMode::handle_items(){
 				case Main:
 					break;
 				case Mouse_Boss:
+					item_sprite->loc_x += 5;
 					break;
 				case Mouse_Normal:
 					break;
@@ -849,10 +877,10 @@ std::array<bool,4> PlayMode::check_wall_easy_fine_grained(){
 	};
 
 
-	glm::vec2 left_test_idx(scroll(middle_x - 8,512),middle_y);
-	glm::vec2 right_test_idx(scroll(middle_x + 8,512),middle_y);
-	glm::vec2 top_test_idx(middle_x,scroll(middle_y + 8,480));
-	glm::vec2 bot_test_idx(middle_x,scroll(middle_y - 8, 480));
+	glm::vec2 left_test_idx(scroll(middle_x - 10,512),middle_y);
+	glm::vec2 right_test_idx(scroll(middle_x + 10,512),middle_y);
+	glm::vec2 top_test_idx(middle_x,scroll(middle_y + 10,480));
+	glm::vec2 bot_test_idx(middle_x,scroll(middle_y - 10, 480));
 
 
 		
@@ -894,7 +922,7 @@ void PlayMode::handle_bomb(uint8_t pressed, float elapsed){
 	if (bomb_info.in_flight){
 		//update bomb flight path
 		ppu.sprites[63].x += bomb_info.v_x * elapsed;
-		ppu.sprites[63].y -= 30 * elapsed;
+		ppu.sprites[63].y -= 20 * elapsed;
 
 		if(bomb_info.up_timer > 0.0){
 			ppu.sprites[63].y += bomb_info.v_y * elapsed;
@@ -910,6 +938,7 @@ void PlayMode::handle_bomb(uint8_t pressed, float elapsed){
 		}
 
 		if(bomb_info.explode_timer < 0.0){
+			// The bomb explode!!!
 			ppu.background = background_white;
 			bomb_info.white_timer -= elapsed;
 			ppu.sprites[63].attributes |= 0x80;
@@ -918,7 +947,7 @@ void PlayMode::handle_bomb(uint8_t pressed, float elapsed){
 		if(bomb_info.white_timer < 0.0){
 			ppu.background = background_back;
 			bomb_info.in_flight = false;
-
+			ppu.sprites[53].attributes |= 0x80;
 		}
 
 
@@ -942,4 +971,27 @@ void PlayMode::handle_bomb(uint8_t pressed, float elapsed){
 	
 	}
 
+}
+
+
+void PlayMode::update_sprite_loc(float elapsed){
+	// There is a wall at x:288 // bad to hardcode this
+	auto mouse = sprite_infos[53];
+
+	auto velocity = rand() % 70;
+	
+
+	if((mouse->loc_x >= 250 && mouse->loc_x <= 290) ){
+		mouse->loc_y = 384;
+	}else{
+		mouse->loc_y = 376;
+	}
+
+	if(mouse->loc_x > 512){
+		mouse->loc_x = mouse->loc_x - 512;
+	}else if (mouse->loc_x < 0){
+		mouse->loc_x = mouse->loc_x + 512;
+	}
+
+	mouse->loc_x += elapsed * velocity;
 }

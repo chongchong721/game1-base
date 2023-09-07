@@ -96,7 +96,7 @@ class BombSpriteInfoExtra{
 			this->explode_timer = 2.0;
 			this->up_timer = 1.0;
 			this->v_x = 0.0;
-			this->v_y = 50;
+			this->v_y = 35;
 			this->in_flight = false;
 			this->white_timer = 2.0;
 		}
@@ -117,7 +117,7 @@ struct PlayMode : Mode {
 	struct Button {
 		uint8_t downs = 0;
 		uint8_t pressed = 0;
-	} left, right, down, up;
+	} left, right, down, up, space;
 
 	//some weird background animation:
 	float background_fade = 0.0f;
@@ -168,6 +168,9 @@ struct PlayMode : Mode {
 	std::vector<bool> is_wall;
 
 	void handle_bomb(uint8_t,float);
+
+	// For update moving sprites other than main// rn only one
+	void update_sprite_loc(float elapsed);
 
 	
 };
