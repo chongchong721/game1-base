@@ -101,6 +101,15 @@ PlayMode::PlayMode() {
 		}
 	}
 
+	// Set up wall
+	is_wall.clear();
+
+	for(uint16_t i = 0; i < PPU466::BackgroundHeight; i++){
+		for(uint16_t j = 0; j < PPU466::BackgroundWidth; j++){
+			bool wall = background_load.solid_table[i][j];
+			is_wall.push_back(wall);
+		}
+	}
 	
 
 	// transparent tile? maybe
@@ -217,7 +226,7 @@ void PlayMode::update(float elapsed) {
 	// If we wan't to keep the player always at a fixed location of the screen
 	// We need to move the screen in the rreverse direction?
 
-	constexpr float PlayerSpeed_x = 30.0f;
+	constexpr float PlayerSpeed = 30.0f;
 	// if (left.pressed) player_at.x -= PlayerSpeed * elapsed;
 	// if (right.pressed) player_at.x += PlayerSpeed * elapsed;
 	// if (down.pressed) player_at.y -= PlayerSpeed * elapsed;
@@ -225,17 +234,32 @@ void PlayMode::update(float elapsed) {
 
 	// bt_at means where does the (0,0) of the bg
 
-	if (left.pressed) bg_at.x += PlayerSpeed_x * player_info.speed_up * elapsed;
-	if (right.pressed) bg_at.x -= PlayerSpeed_x * player_info.speed_up * elapsed;
-	if (down.pressed) bg_at.y += PlayerSpeed * player_info.speed_up * elapsed;
-	if (up.pressed) bg_at.y -= PlayerSpeed * player_info.speed_up * elapsed;
 
-	// For items to stay still, they need to, move how?
+	// l - r - up - bot
+	auto check_result = check_wall_easy_fine_grained();
 
-	if (left.pressed) real_position.x -= PlayerSpeed_x * player_info.speed_up * elapsed;
-	if (right.pressed) real_position.x += PlayerSpeed_x * player_info.speed_up * elapsed;
-	if (down.pressed) real_position.y -= PlayerSpeed * player_info.speed_up * elapsed;
-	if (up.pressed) real_position.y += PlayerSpeed * player_info.speed_up * elapsed;
+
+
+
+
+	if (left.pressed && !check_result[0]){
+		bg_at.x += PlayerSpeed * player_info.speed_up * elapsed;
+		real_position.x -= PlayerSpeed * player_info.speed_up * elapsed;
+	} 
+	if (right.pressed && !check_result[1]){
+		bg_at.x -= PlayerSpeed * player_info.speed_up * elapsed;
+		real_position.x += PlayerSpeed * player_info.speed_up * elapsed;
+	} 
+	if (up.pressed && !check_result[2]){
+		bg_at.y -= PlayerSpeed * player_info.speed_up * elapsed;
+		real_position.y += PlayerSpeed * player_info.speed_up * elapsed;
+	} 
+	if (down.pressed && !check_result[3]){
+		bg_at.y += PlayerSpeed * player_info.speed_up * elapsed;
+		real_position.y -= PlayerSpeed * player_info.speed_up * elapsed;
+	} 
+
+
 
 
 	// if (real_position.x < 0)
@@ -391,7 +415,7 @@ void PlayMode::handle_items(){
 				ppu.sprites[i].attributes &= 0x7F;
 			}
 			// If hit?
-			else if ((tmp_x < 2 && tmp_x > -2) && (tmp_y < 2 && tmp_y > -2)){
+			else if ((tmp_x < 4 && tmp_x > -4) && (tmp_y < 4 && tmp_y > -4)){
 				auto item_type = item_sprite->type;
 
 				switch (item_type)
@@ -494,5 +518,265 @@ void PlayMode::update_timer(float elapsed){
 			}
 		}
 	}
+
+}
+
+std::array<bool,4> PlayMode::check_wall(){
+
+	// This test seems too strict
+
+    float player_position_x = real_position.x + 128;
+	float player_position_y = real_position.y + 120;
+
+	if (player_position_x > 512)
+		player_position_x-=512;
+	if(player_position_y > 480)
+		player_position_y-=480;
+
+	// In most situation, will find 8 neighbor block to determine if there is wall
+	
+
+	// left-most -> player_position_x
+	// bottom-most -> player_position_y
+	// right-most -> player_position_x + 8
+	// up-most -> player_position_y + 8
+
+	float left_most = player_position_x;
+	float bottom_most = player_position_y;
+	float right_most = left_most + 8;
+	float up_most = bottom_most + 8;
+
+	if (right_most > 512) 
+		right_most -= 512;
+	if (up_most > 480)
+		up_most -= 480;
+
+	glm::ivec2 left_idx_bot((int)(left_most / 8),(int)(bottom_most/8));
+	glm::ivec2 left_idx_up((int)(left_most / 8),(int)(up_most/8));
+	glm::ivec2 right_idx_bot((int)(right_most / 8),(int)(bottom_most/8));
+	glm::ivec2 right_idx_up((int)(right_most / 8),(int)(up_most/8));
+
+
+	// If idx get to < 0, scroll it
+	auto scroll = [](int idx, int limit)->int{
+		if (idx < 0)
+			return limit - 1;
+		else if(idx >= limit)
+			return 0;
+		else 
+			return idx;
+	};
+
+	glm::ivec2 left_test_idx_bot(scroll(left_idx_bot.x - 1,64),left_idx_bot.y);
+	glm::ivec2 left_test_idx_up(scroll(left_idx_up.x - 1,64),left_idx_up.y);
+
+	glm::ivec2 right_test_idx_bot(scroll(right_idx_bot.x + 1,64),right_idx_bot.y);
+	glm::ivec2 right_test_idx_up(scroll(right_idx_up.x + 1,64),right_idx_up.y);
+
+	glm::ivec2 top_test_idx_left(left_idx_up.x,scroll(left_idx_up.y + 1, 60));
+	glm::ivec2 top_test_idx_right(right_idx_up.x,scroll(right_idx_up.y + 1, 60));
+
+	glm::ivec2 bot_test_idx_left(left_idx_bot.x,scroll(left_idx_bot.y-1,60));
+	glm::ivec2 bot_test_idx_right(right_idx_bot.x,scroll(right_idx_bot.y-1,60));
+
+	
+	// Test left side
+	bool left_wall = is_wall[left_test_idx_bot.y * 64 + left_test_idx_bot.x] || is_wall[left_test_idx_up.y * 64 + left_test_idx_up.x];
+	bool right_wall = is_wall[right_test_idx_bot.y * 64 + right_test_idx_bot.x] || is_wall[right_test_idx_up.y * 64 + right_test_idx_up.x];
+	bool up_wall = is_wall[top_test_idx_left.y * 64 + top_test_idx_left.x] || is_wall[top_test_idx_right.y * 64 + top_test_idx_right.x];
+	bool bot_wall = is_wall[bot_test_idx_left.y * 64 + bot_test_idx_left.x] || is_wall[bot_test_idx_right.y * 64 + bot_test_idx_right.x];
+
+	std::array<bool,4> arr;
+
+	arr[0] = left_wall;
+	arr[1] = right_wall;
+	arr[2] = up_wall;
+	arr[3] = bot_wall;
+
+	return arr;
+
+}
+
+
+
+std::array<bool,4> PlayMode::check_wall_easy(){
+
+	// This test seems too strict
+
+    float player_position_x = real_position.x + 128;
+	float player_position_y = real_position.y + 120;
+
+	if (player_position_x > 512)
+		player_position_x-=512;
+	if(player_position_y > 480)
+		player_position_y-=480;
+
+	// Easy case, just find four neighbors
+	glm::ivec2 character_idx((int)(player_position_x / 8),(int)(player_position_y / 8));
+
+
+	// If idx get to < 0, scroll it
+	auto scroll = [](int idx, int limit)->int{
+		if (idx < 0)
+			return limit - 1;
+		else if(idx >= limit)
+			return 0;
+		else 
+			return idx;
+	};
+
+	glm::ivec2 left_test_idx(scroll(character_idx.x - 1,64),character_idx.y);
+
+
+	glm::ivec2 right_test_idx(scroll(character_idx.x + 1,64),character_idx.y);
+
+
+	glm::ivec2 top_test_idx(character_idx.x,scroll(character_idx.y + 1, 60));
+
+
+	glm::ivec2 bot_test_idx(character_idx.x,scroll(character_idx.y-1,60));
+	
+
+		
+	// Test left side
+	bool left_wall = is_wall[left_test_idx.y * 64 + left_test_idx.x]; 
+	bool right_wall = is_wall[right_test_idx.y * 64 + right_test_idx.x]; 
+	bool up_wall = is_wall[top_test_idx.y * 64 + top_test_idx.x]; 
+	bool bot_wall = is_wall[bot_test_idx.y * 64 + bot_test_idx.x]; 
+
+	std::array<bool,4> arr;
+
+	arr[0] = left_wall;
+	arr[1] = right_wall;
+	arr[2] = up_wall;
+	arr[3] = bot_wall;
+
+	return arr;
+
+}
+
+
+std::array<bool,4> PlayMode::check_wall_fine_grained(){
+
+	// This test seems too strict
+
+    float player_position_x = real_position.x + 128;
+	float player_position_y = real_position.y + 120;
+
+	if (player_position_x > 512)
+		player_position_x-=512;
+	if(player_position_y > 480)
+		player_position_y-=480;
+
+
+	float left_most = player_position_x;
+	float bottom_most = player_position_y;
+	float right_most = left_most + 8;
+	float up_most = bottom_most + 8;
+
+	if (right_most > 512) 
+		right_most -= 512;
+	if (up_most > 480)
+		up_most -= 480;
+
+	glm::vec2 left_idx_bot(left_most,bottom_most);
+	glm::vec2 left_idx_up(left_most ,up_most);
+	glm::vec2 right_idx_bot(right_most,bottom_most);
+	glm::vec2 right_idx_up(right_most,up_most);
+
+	// If idx get to < 0, scroll it
+	auto scroll = [](float idx ,float limit)->float{
+		if (idx < 0)
+			return limit + idx;
+		else if(idx >= limit)
+			return idx - limit;
+		else 
+			return idx;
+	};
+
+	glm::vec2 left_test_idx_bot(scroll(left_idx_bot.x - 1,512),left_idx_bot.y);
+	glm::vec2 left_test_idx_up(scroll(left_idx_up.x - 1,512),left_idx_up.y);
+
+	glm::vec2 right_test_idx_bot(scroll(right_idx_bot.x + 1,512),right_idx_bot.y);
+	glm::vec2 right_test_idx_up(scroll(right_idx_up.x + 1,512),right_idx_up.y);
+
+	glm::vec2 top_test_idx_left(left_idx_up.x,scroll(left_idx_up.y + 1, 480));
+	glm::vec2 top_test_idx_right(right_idx_up.x,scroll(right_idx_up.y + 1, 480));
+
+	glm::vec2 bot_test_idx_left(left_idx_bot.x,scroll(left_idx_bot.y-1,480));
+	glm::vec2 bot_test_idx_right(right_idx_bot.x,scroll(right_idx_bot.y-1,480));
+	
+
+		
+	bool left_wall = is_wall[(int)(left_test_idx_bot.y/8) * 64 + (int)(left_test_idx_bot.x/8)] || is_wall[(int)(left_test_idx_up.y/8) * 64 + (int)(left_test_idx_up.x/8)];
+	bool right_wall = is_wall[(int)(right_test_idx_bot.y/8) * 64 + (int)(right_test_idx_bot.x/8)] || is_wall[(int)(right_test_idx_up.y/8) * 64 + (int)(right_test_idx_up.x/8)];
+	bool up_wall = is_wall[(int)(top_test_idx_left.y/8) * 64 + (int)(top_test_idx_left.x/8)] || is_wall[(int)(top_test_idx_right.y /8)* 64 + (int)(top_test_idx_right.x/8)];
+	bool bot_wall = is_wall[(int)(bot_test_idx_left.y/8) * 64 + (int)(bot_test_idx_left.x/8)] || is_wall[(int)(bot_test_idx_right.y/8) * 64 + (int)(bot_test_idx_right.x/8)];
+
+	std::array<bool,4> arr;
+
+	arr[0] = left_wall;
+	arr[1] = right_wall;
+	arr[2] = up_wall;
+	arr[3] = bot_wall;
+
+	return arr;
+
+}
+
+
+
+std::array<bool,4> PlayMode::check_wall_easy_fine_grained(){
+
+	// This test seems too strict
+
+    float player_position_x = real_position.x + 128;
+	float player_position_y = real_position.y + 120;
+
+	if (player_position_x > 512)
+		player_position_x-=512;
+	if(player_position_y > 480)
+		player_position_y-=480;
+
+
+	float middle_x = player_position_x + 4;
+	float middle_y = player_position_y + 4;
+
+	if (middle_x > 512) 
+		middle_x -= 512;
+	if (middle_y > 480)
+		middle_y -= 480;
+
+	// If idx get to < 0, scroll it
+	auto scroll = [](float idx ,float limit)->float{
+		if (idx < 0)
+			return limit + idx;
+		else if(idx >= limit)
+			return idx - limit;
+		else 
+			return idx;
+	};
+
+
+	glm::vec2 left_test_idx(scroll(middle_x - 6,512),middle_y);
+	glm::vec2 right_test_idx(scroll(middle_x + 6,512),middle_y);
+	glm::vec2 top_test_idx(middle_x,scroll(middle_y + 6,480));
+	glm::vec2 bot_test_idx(middle_x,scroll(middle_y - 6, 480));
+
+
+		
+	bool left_wall = is_wall[(int)(left_test_idx.y/8) * 64 + (int)(left_test_idx.x/8)] ;
+	bool right_wall = is_wall[(int)(right_test_idx.y/8) * 64 + (int)(right_test_idx.x/8)]; 
+	bool up_wall = is_wall[(int)(top_test_idx.y/8) * 64 + (int)(top_test_idx.x/8)]; 
+	bool bot_wall = is_wall[(int)(bot_test_idx.y/8) * 64 + (int)(bot_test_idx.x/8)]; 
+
+	std::array<bool,4> arr;
+
+	arr[0] = left_wall;
+	arr[1] = right_wall;
+	arr[2] = up_wall;
+	arr[3] = bot_wall;
+
+	return arr;
 
 }

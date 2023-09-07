@@ -121,6 +121,13 @@ struct PlayMode : Mode {
 
 	void update_timer(float);
 
+	std::array<bool,4> check_wall();
+	std::array<bool,4> check_wall_easy();
+	std::array<bool,4> check_wall_fine_grained();
+	std::array<bool,4> check_wall_easy_fine_grained();
+
+
+	std::vector<bool> is_wall;
 
 	
 };
