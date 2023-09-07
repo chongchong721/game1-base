@@ -240,6 +240,27 @@ void PlayMode::update(float elapsed) {
 
 
 
+	// Not using physically based gravity here. Just use a constant speed for dropping
+
+
+	// For jump, give it a constant speed for some time.
+	// Handle jump
+
+	// Timer needed before assigning speed, or check_result[3] will directly make speed 0
+	update_jump_timer(elapsed,check_result[3]);
+
+	if (up.pressed && !check_result[2]){
+		// Not in jump state
+		if (player_info.jump_speed == 0.0 && check_result[3]){
+			player_info.jump_speed = 120.0;
+			player_info.jump_time_left = 0.5;
+		}
+	}
+
+	bg_at.y -= player_info.jump_speed * player_info.jump_up * elapsed;
+	real_position.y += player_info.jump_speed * player_info.jump_up * elapsed;
+
+
 
 
 	if (left.pressed && !check_result[0]){
@@ -250,15 +271,12 @@ void PlayMode::update(float elapsed) {
 		bg_at.x -= PlayerSpeed * player_info.speed_up * elapsed;
 		real_position.x += PlayerSpeed * player_info.speed_up * elapsed;
 	} 
-	if (up.pressed && !check_result[2]){
-		bg_at.y -= PlayerSpeed * player_info.speed_up * elapsed;
-		real_position.y += PlayerSpeed * player_info.speed_up * elapsed;
-	} 
-	if (down.pressed && !check_result[3]){
-		bg_at.y += PlayerSpeed * player_info.speed_up * elapsed;
-		real_position.y -= PlayerSpeed * player_info.speed_up * elapsed;
-	} 
-
+	
+	// Dropping
+	if(!check_result[3]){
+		bg_at.y += player_info.drop_speed * elapsed;
+		real_position.y -= player_info.drop_speed * elapsed;
+	}
 
 
 
@@ -415,7 +433,7 @@ void PlayMode::handle_items(){
 				ppu.sprites[i].attributes &= 0x7F;
 			}
 			// If hit?
-			else if ((tmp_x < 4 && tmp_x > -4) && (tmp_y < 4 && tmp_y > -4)){
+			else if ((tmp_x < 8 && tmp_x > -8) && (tmp_y < 8 && tmp_y > -8)){
 				auto item_type = item_sprite->type;
 
 				switch (item_type)
@@ -427,7 +445,7 @@ void PlayMode::handle_items(){
 					ppu.sprites[i].attributes |= 0x80;
 					break;
 				case Battery:
-					player_info.jump_up = 3.0;
+					player_info.jump_up = 1.5;
 					player_info.jump_up_time_left = 20.0;
 					sprite_infos[i]->is_invisible = true;
 					ppu.sprites[i].attributes |= 0x80;
@@ -758,10 +776,10 @@ std::array<bool,4> PlayMode::check_wall_easy_fine_grained(){
 	};
 
 
-	glm::vec2 left_test_idx(scroll(middle_x - 6,512),middle_y);
-	glm::vec2 right_test_idx(scroll(middle_x + 6,512),middle_y);
-	glm::vec2 top_test_idx(middle_x,scroll(middle_y + 6,480));
-	glm::vec2 bot_test_idx(middle_x,scroll(middle_y - 6, 480));
+	glm::vec2 left_test_idx(scroll(middle_x - 8,512),middle_y);
+	glm::vec2 right_test_idx(scroll(middle_x + 8,512),middle_y);
+	glm::vec2 top_test_idx(middle_x,scroll(middle_y + 8,480));
+	glm::vec2 bot_test_idx(middle_x,scroll(middle_y - 8, 480));
 
 
 		
@@ -779,4 +797,22 @@ std::array<bool,4> PlayMode::check_wall_easy_fine_grained(){
 
 	return arr;
 
+}
+
+
+
+void PlayMode::update_jump_timer(float elapsed,bool bot_wall){
+	if (bot_wall){
+		player_info.jump_time_left = -1.0;
+		player_info.jump_speed = 0.0;
+		return;
+	}
+
+	if (player_info.jump_time_left > 0.0){
+		player_info.jump_time_left -= elapsed;
+		if(player_info.jump_time_left < 0.0){
+			player_info.jump_speed = 0.0;
+			player_info.jump_time_left = -1.0;
+		}
+	}
 }

@@ -58,7 +58,10 @@ class MainSpriteInfoExtra{
 		float current_velocity_y;
 		float current_acceleration;
 
-		float g = 10.0;
+		float drop_speed;
+
+		float jump_speed;
+		float jump_time_left;
 
 	MainSpriteInfoExtra(){
 		this->has_bomb = false;
@@ -66,6 +69,9 @@ class MainSpriteInfoExtra{
 		this->jump_up = 1.0;
 		this->speed_up_time_left = -1.0;
 		this->jump_up_time_left = -1.0;
+		this->jump_speed = 0.0;
+		this->drop_speed = 50.0;
+		this->jump_time_left = -1;
 	}
 };
 
@@ -120,6 +126,7 @@ struct PlayMode : Mode {
 	void handle_items();
 
 	void update_timer(float);
+	void update_jump_timer(float,bool);
 
 	std::array<bool,4> check_wall();
 	std::array<bool,4> check_wall_easy();
