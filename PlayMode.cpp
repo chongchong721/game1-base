@@ -75,6 +75,40 @@ PlayMode::PlayMode() {
 		type_palette_map[type] = sprites_load[i].idx_to_pallete;
 	}
 
+	// Create a reverse tile for main sprite
+	auto main_tile = ppu.tile_table[type_tile_map[Main]];
+
+	// https://www.geeksforgeeks.org/write-an-efficient-c-program-to-reverse-bits-of-a-number/#
+	auto reverse_bits = [](uint8_t num)->uint8_t{
+		unsigned int count = sizeof(num) * 8 - 1;
+    	unsigned int reverse_num = num;
+ 
+    	num >>= 1;
+		while (num) {
+			reverse_num <<= 1;
+			reverse_num |= num & 1;
+			num >>= 1;
+			count--;
+		}
+		reverse_num <<= count;
+		return reverse_num;
+	};
+
+	PPU466::Tile reverse_main_tile;
+	// Reverse every row of bit0 and bit1
+	for (uint8_t i = 0; i < 8; i++){
+		auto reverse_bit0 = reverse_bits(main_tile.bit0[i]);
+		auto reverse_bit1 = reverse_bits(main_tile.bit1[i]);
+
+		reverse_main_tile.bit0[i] = reverse_bit0;
+		reverse_main_tile.bit1[i] = reverse_bit1;
+	}
+
+	// Set tile 99 to be this tile
+	ppu.tile_table[99] = reverse_main_tile;
+	player_info.reverse_tile_idx = 99;
+
+
 	// For background
 
 	auto background_load = bg[0];
@@ -101,6 +135,8 @@ PlayMode::PlayMode() {
 		}
 	}
 
+	background_back = ppu.background;
+
 	// Set up wall
 	is_wall.clear();
 
@@ -108,6 +144,41 @@ PlayMode::PlayMode() {
 		for(uint16_t j = 0; j < PPU466::BackgroundWidth; j++){
 			bool wall = background_load.solid_table[i][j];
 			is_wall.push_back(wall);
+		}
+	}
+
+	// Make an all white tile. palette[0][4] is white RGBA
+	ppu.tile_table[98].bit0 = {
+		0b11111111,
+		0b11111111,
+		0b11111111,
+		0b11111111,
+		0b11111111,
+		0b11111111,
+		0b11111111,
+		0b11111111,
+	};
+	ppu.tile_table[98].bit1 = {
+		0b11111111,
+		0b11111111,
+		0b11111111,
+		0b11111111,
+		0b11111111,
+		0b11111111,
+		0b11111111,
+		0b11111111,
+	};
+
+	for(uint16_t i = 0; i < PPU466::BackgroundHeight; i++){
+		for(uint16_t j = 0; j < PPU466::BackgroundWidth; j++){
+
+			uint16_t tile_idx = 98;
+
+			uint16_t config = 0;
+
+			config = tile_idx | 0 << 8;
+
+			background_white[i * PPU466::BackgroundWidth + j] = config;
 		}
 	}
 	
@@ -137,7 +208,7 @@ PlayMode::PlayMode() {
 	ppu.tile_table[32].bit1 = mytile.bit1;
 
 
-	// Setting up sprites and items? 
+	// Setting up sprites and items
 
 	for (auto i = 0; i < 64; i++){
 		sprite_infos.emplace_back(new SpriteInfoExtra(i,false,Main));
@@ -266,10 +337,12 @@ void PlayMode::update(float elapsed) {
 	if (left.pressed && !check_result[0]){
 		bg_at.x += PlayerSpeed * player_info.speed_up * elapsed;
 		real_position.x -= PlayerSpeed * player_info.speed_up * elapsed;
+		player_info.face = false;
 	} 
 	if (right.pressed && !check_result[1]){
 		bg_at.x -= PlayerSpeed * player_info.speed_up * elapsed;
 		real_position.x += PlayerSpeed * player_info.speed_up * elapsed;
+		player_info.face = true;
 	} 
 	
 	// Dropping
@@ -279,16 +352,10 @@ void PlayMode::update(float elapsed) {
 	}
 
 
+	//Throw bomb?
+	handle_bomb(down.pressed,elapsed);
 
-	// if (real_position.x < 0)
-	// 	real_position.x += 512;
-	// else if(real_position.x > 512)
-	// 	real_position.x -=512;
 
-	// if (real_position.y < 0)
-	// 	real_position.y += 480;
-	// else if(real_position.y > 480)
-	// 	real_position.y -=480;
 
 	update_timer(elapsed);
 
@@ -323,7 +390,13 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 	//player sprite:
 	ppu.sprites[0].x = ppu.ScreenWidth/2;
 	ppu.sprites[0].y = ppu.ScreenHeight/2;
-	// ppu.sprites[0].index = 32;
+	
+	if (player_info.face){
+		ppu.sprites[0].index = type_tile_map[Main];
+	}else{
+		ppu.sprites[0].index = player_info.reverse_tile_idx;
+	}
+
 	// ppu.sprites[0].attributes = 3;
 
 
@@ -439,7 +512,7 @@ void PlayMode::handle_items(){
 				switch (item_type)
 				{
 				case Apple:
-					player_info.speed_up = 2.0;
+					player_info.speed_up = 2.3;
 					player_info.speed_up_time_left = 20.0;
 					sprite_infos[i]->is_invisible = true;
 					ppu.sprites[i].attributes |= 0x80;
@@ -815,4 +888,58 @@ void PlayMode::update_jump_timer(float elapsed,bool bot_wall){
 			player_info.jump_time_left = -1.0;
 		}
 	}
+}
+
+void PlayMode::handle_bomb(uint8_t pressed, float elapsed){
+	if (bomb_info.in_flight){
+		//update bomb flight path
+		ppu.sprites[63].x += bomb_info.v_x * elapsed;
+		ppu.sprites[63].y -= 30 * elapsed;
+
+		if(bomb_info.up_timer > 0.0){
+			ppu.sprites[63].y += bomb_info.v_y * elapsed;
+		}
+
+
+
+		bomb_info.up_timer -= elapsed;
+		bomb_info.explode_timer -= elapsed;
+
+		if(bomb_info.up_timer < 0.0){
+			bomb_info.v_y = 0;
+		}
+
+		if(bomb_info.explode_timer < 0.0){
+			ppu.background = background_white;
+			bomb_info.white_timer -= elapsed;
+			ppu.sprites[63].attributes |= 0x80;
+		}
+
+		if(bomb_info.white_timer < 0.0){
+			ppu.background = background_back;
+			bomb_info.in_flight = false;
+
+		}
+
+
+	}else{
+		if (pressed == 0)
+				return;
+		else{
+			if (player_info.has_bomb){
+					//63 is the bomb sprite
+					float v_x = player_info.face ? 45.0f : -45.0f;
+					bomb_info.v_x = v_x;
+					bomb_info.in_flight = true;
+					ppu.sprites[63].x = PPU466::ScreenWidth / 2;
+					ppu.sprites[63].y = PPU466::ScreenHeight / 2;
+					ppu.sprites[63].attributes &= 0x7F;
+					player_info.has_bomb = false;
+				}else{
+					return;
+				}
+	}
+	
+	}
+
 }

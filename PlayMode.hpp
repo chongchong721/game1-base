@@ -63,6 +63,11 @@ class MainSpriteInfoExtra{
 		float jump_speed;
 		float jump_time_left;
 
+		// true = right fales = left
+		bool face;
+
+		uint8_t reverse_tile_idx;
+
 	MainSpriteInfoExtra(){
 		this->has_bomb = false;
 		this->speed_up = 1.0;
@@ -72,7 +77,29 @@ class MainSpriteInfoExtra{
 		this->jump_speed = 0.0;
 		this->drop_speed = 50.0;
 		this->jump_time_left = -1;
+		this->face = true;
+		this->reverse_tile_idx = 0;
 	}
+};
+
+
+class BombSpriteInfoExtra{
+	public:
+		float explode_timer;
+		float up_timer;
+		float white_timer; 
+		float v_y;
+		float v_x;
+		bool in_flight;
+
+		BombSpriteInfoExtra(){
+			this->explode_timer = 2.0;
+			this->up_timer = 1.0;
+			this->v_x = 0.0;
+			this->v_y = 50;
+			this->in_flight = false;
+			this->white_timer = 2.0;
+		}
 };
 
 struct PlayMode : Mode {
@@ -115,6 +142,10 @@ struct PlayMode : Mode {
 
 	std::vector<SpriteInfoExtra *> sprite_infos;
 	MainSpriteInfoExtra player_info;
+	BombSpriteInfoExtra bomb_info;
+
+	std::array< uint16_t, PPU466::BackgroundWidth * PPU466::BackgroundHeight > background_white;
+	std::array< uint16_t, PPU466::BackgroundWidth * PPU466::BackgroundHeight > background_back;
 
 
 	bool item_inside_screen(SpriteInfoExtra * item);
@@ -135,6 +166,8 @@ struct PlayMode : Mode {
 
 
 	std::vector<bool> is_wall;
+
+	void handle_bomb(uint8_t,float);
 
 	
 };
