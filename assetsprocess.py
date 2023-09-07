@@ -476,7 +476,7 @@ def generate_palettes_and_tiles(bginfo,spriteinfo):
                 f.write(loc_bytes)
                 f.write(type_bytes)
 
-        
+## Generate Win Lose background
 def process_text_bg(palette):
     nunique_tile = 2
 
