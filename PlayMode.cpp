@@ -261,6 +261,69 @@ PlayMode::PlayMode() {
 	sprite_infos[53]->loc_x = 400;
 	sprite_infos[53]->loc_y = 376; // On the third floor
 
+
+
+
+
+
+
+
+
+
+
+	// Read text background
+	palette_idx = 0;
+
+
+	std::vector<Background_Text_Data> bg_text_win;
+	std::ifstream in_tw("./assets/runtime_bg_textwin",std::ios::binary);
+
+	read_chunk<Background_Text_Data>(in_tw,"bkt1",&bg_text_win);
+
+	// Let's set the tile to be 150 and 151
+	uint8_t win_tile_idx_offset = 150;
+	for(auto i = 0; i < 2; i++){
+		ppu.tile_table[win_tile_idx_offset + i] = bg_text_win[0].tiles[i];
+	}
+
+	for(uint16_t i = 0; i < PPU466::BackgroundHeight; i++){
+		for(uint16_t j = 0; j < PPU466::BackgroundWidth; j++){
+
+			uint16_t tile_idx = bg_text_win[0].tile_idx_table[i][j] + win_tile_idx_offset;
+
+			uint16_t config = 0;
+
+			config = tile_idx | palette_idx << 8;
+
+			background_text_win[i * PPU466::BackgroundWidth + j] = config;
+		}
+	}
+
+
+
+	std::vector<Background_Text_Data> bg_text_lose;
+	std::ifstream in_tl("./assets/runtime_bg_textlose",std::ios::binary);
+
+	read_chunk<Background_Text_Data>(in_tl,"bkt1",&bg_text_lose);
+
+	// Let's set the tile to be 152 and 153
+	uint8_t lose_tile_idx_offset = 152;
+	for(auto i = 0; i < 2; i++){
+		ppu.tile_table[lose_tile_idx_offset + i] = bg_text_lose[0].tiles[i];
+	}
+
+	for(uint16_t i = 0; i < PPU466::BackgroundHeight; i++){
+		for(uint16_t j = 0; j < PPU466::BackgroundWidth; j++){
+
+			uint16_t tile_idx = bg_text_lose[0].tile_idx_table[i][j] + lose_tile_idx_offset;
+
+			uint16_t config = 0;
+
+			config = tile_idx | palette_idx << 8;
+
+			background_text_lose[i * PPU466::BackgroundWidth + j] = config;
+		}
+	}
 }
 
 PlayMode::~PlayMode() {
@@ -348,13 +411,19 @@ void PlayMode::update(float elapsed) {
 	if (up.pressed && !check_result[2]){
 		// Not in jump state
 		if (player_info.jump_speed == 0.0 && check_result[3]){
-			player_info.jump_speed = 120.0;
+			player_info.jump_speed = 150.0;
 			player_info.jump_time_left = 0.5;
 		}
 	}
 
-	bg_at.y -= player_info.jump_speed * player_info.jump_up * elapsed;
-	real_position.y += player_info.jump_speed * player_info.jump_up * elapsed;
+	if (!check_result[2]){
+		bg_at.y -= player_info.jump_speed * player_info.jump_up * elapsed;
+		real_position.y += player_info.jump_speed * player_info.jump_up * elapsed;
+	}else{// Stop jump
+		player_info.jump_time_left = -1.0;
+		player_info.jump_speed = 0.0;
+	}
+
 
 
 
@@ -597,6 +666,9 @@ void PlayMode::handle_items(){
 				ppu.sprites[i].x = test_x;
 				ppu.sprites[i].y = test_y;
 				ppu.sprites[i].attributes &= 0x7F;
+
+				sprite_infos[i]->is_insight = true;
+
 			}
 
 
@@ -877,10 +949,10 @@ std::array<bool,4> PlayMode::check_wall_easy_fine_grained(){
 	};
 
 
-	glm::vec2 left_test_idx(scroll(middle_x - 10,512),middle_y);
-	glm::vec2 right_test_idx(scroll(middle_x + 10,512),middle_y);
-	glm::vec2 top_test_idx(middle_x,scroll(middle_y + 10,480));
-	glm::vec2 bot_test_idx(middle_x,scroll(middle_y - 10, 480));
+	glm::vec2 left_test_idx(scroll(middle_x - 4,512),middle_y);
+	glm::vec2 right_test_idx(scroll(middle_x + 4,512),middle_y);
+	glm::vec2 top_test_idx(middle_x,scroll(middle_y + 4,480));
+	glm::vec2 bot_test_idx(middle_x,scroll(middle_y - 4, 480));
 
 
 		
@@ -921,13 +993,27 @@ void PlayMode::update_jump_timer(float elapsed,bool bot_wall){
 void PlayMode::handle_bomb(uint8_t pressed, float elapsed){
 	if (bomb_info.in_flight){
 		//update bomb flight path
-		ppu.sprites[63].x += bomb_info.v_x * elapsed;
-		ppu.sprites[63].y -= 20 * elapsed;
+		//std::cout << "vx" << bomb_info.v_x << std::endl;
+		//float move_horizontal = bomb_info.v_x * elapsed;
+
+		bomb_info.position.x += bomb_info.v_x * elapsed;
+
+		bomb_info.position.y -= 20 * elapsed;
 
 		if(bomb_info.up_timer > 0.0){
-			ppu.sprites[63].y += bomb_info.v_y * elapsed;
+			float up = bomb_info.v_y * elapsed;
+			// if (up)
+			// std::cout << up << std::endl;
+			// std::cout << (int)ppu.sprites[63].y << std::endl;
+			bomb_info.position.y += up;
+			// std::cout << (int)ppu.sprites[63].y << std::endl;
+			// std::cout << "fly up?" << std::endl;
 		}
 
+		ppu.sprites[63].x = (uint8_t)bomb_info.position.x;
+		ppu.sprites[63].y = (uint8_t)bomb_info.position.y;
+
+		std::cout << (int)ppu.sprites[63].x << "," << (int)ppu.sprites[63].y << std::endl;
 
 
 		bomb_info.up_timer -= elapsed;
@@ -942,12 +1028,29 @@ void PlayMode::handle_bomb(uint8_t pressed, float elapsed){
 			ppu.background = background_white;
 			bomb_info.white_timer -= elapsed;
 			ppu.sprites[63].attributes |= 0x80;
+			set_tile_to_transparent(63);
+			set_tile_to_transparent(53);
 		}
 
 		if(bomb_info.white_timer < 0.0){
 			ppu.background = background_back;
 			bomb_info.in_flight = false;
+			
+			
+			bool mouse_insight = sprite_infos[53]->is_insight;
+
+			if(mouse_insight){
+				ppu.background = background_text_win;
+			}else{
+				ppu.background = background_text_lose;
+			}
+			bg_at.x = 0;
+			bg_at.y = 0;
+
 			ppu.sprites[53].attributes |= 0x80;
+			for (auto i = 53; i < 64; i++){
+				set_tile_to_transparent(i);
+			}
 		}
 
 
@@ -960,6 +1063,7 @@ void PlayMode::handle_bomb(uint8_t pressed, float elapsed){
 					float v_x = player_info.face ? 45.0f : -45.0f;
 					bomb_info.v_x = v_x;
 					bomb_info.in_flight = true;
+					bomb_info.position = glm::vec2(128,120);
 					ppu.sprites[63].x = PPU466::ScreenWidth / 2;
 					ppu.sprites[63].y = PPU466::ScreenHeight / 2;
 					ppu.sprites[63].attributes &= 0x7F;
@@ -978,7 +1082,7 @@ void PlayMode::update_sprite_loc(float elapsed){
 	// There is a wall at x:288 // bad to hardcode this
 	auto mouse = sprite_infos[53];
 
-	auto velocity = rand() % 70;
+	auto velocity = rand() % 130;
 	
 
 	if((mouse->loc_x >= 250 && mouse->loc_x <= 290) ){
@@ -994,4 +1098,9 @@ void PlayMode::update_sprite_loc(float elapsed){
 	}
 
 	mouse->loc_x += elapsed * velocity;
+}
+
+
+void PlayMode::set_tile_to_transparent(uint8_t sprite_idx){
+	ppu.sprites[sprite_idx].index = 100;
 }

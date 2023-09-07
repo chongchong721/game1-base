@@ -25,6 +25,7 @@ class SpriteInfoExtra{
 		bool is_item;
 		glm::vec2 speed; // speed?
 		bool is_invisible;
+		bool is_insight;
 		uint16_t loc_x;
 		uint16_t loc_y;
 		Sprite_Type type;
@@ -43,6 +44,7 @@ class SpriteInfoExtra{
 			this->type = type;
 			this->is_disabled = false;
 			this->disable_timer = -1.0;
+			this->is_insight = false;
 		}
 };
 
@@ -91,14 +93,16 @@ class BombSpriteInfoExtra{
 		float v_y;
 		float v_x;
 		bool in_flight;
+		glm::vec2 position;
 
 		BombSpriteInfoExtra(){
 			this->explode_timer = 2.0;
 			this->up_timer = 1.0;
 			this->v_x = 0.0;
-			this->v_y = 35;
+			this->v_y = 45;
 			this->in_flight = false;
 			this->white_timer = 2.0;
+			this->position = glm::vec2(0,0);
 		}
 };
 
@@ -146,7 +150,8 @@ struct PlayMode : Mode {
 
 	std::array< uint16_t, PPU466::BackgroundWidth * PPU466::BackgroundHeight > background_white;
 	std::array< uint16_t, PPU466::BackgroundWidth * PPU466::BackgroundHeight > background_back;
-
+	std::array< uint16_t, PPU466::BackgroundWidth * PPU466::BackgroundHeight > background_text_win;
+	std::array< uint16_t, PPU466::BackgroundWidth * PPU466::BackgroundHeight > background_text_lose;
 
 	bool item_inside_screen(SpriteInfoExtra * item);
 
@@ -172,6 +177,9 @@ struct PlayMode : Mode {
 	// For update moving sprites other than main// rn only one
 	void update_sprite_loc(float elapsed);
 
+
+	void set_tile_to_transparent(uint8_t sprite_idx);
+
 	
 };
 
@@ -182,6 +190,14 @@ struct Background_Load_Data{
 	std::array<PPU466::Tile,2> tiles;
 	uint8_t tile_idx_table[60][64];
 	uint8_t solid_table[60][64];
+	uint8_t palette_idx;
+};
+
+
+struct Background_Text_Data{
+	uint8_t ntiles; // This should be 2(hardcoded)
+	std::array<PPU466::Tile,2> tiles;
+	uint8_t tile_idx_table[60][64];
 	uint8_t palette_idx;
 };
 

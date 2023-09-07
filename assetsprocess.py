@@ -477,11 +477,82 @@ def generate_palettes_and_tiles(bginfo,spriteinfo):
                 f.write(type_bytes)
 
         
+def process_text_bg(palette):
+    nunique_tile = 2
+
+    ncolumn,nrow = 512,480
+    ntile_column,ntile_row = 64,60
+
+    im = Image.open("assets/text_win.png")
+
+    color_arr = np.array(im)
 
 
+    color_palette = palette
+
+    # should have 2 elements, each of a (8,8,2)
+    background_tile_table = []
+
+    tile_bg_map =  np.zeros((60,64),dtype=np.uint8)
+
+    tile0 = np.zeros((8,8,2),dtype=np.uint8)
+    tile1 = np.zeros((8,8,2),dtype=np.uint8)
+
+    background_tile_table.append(tile0)
+    background_tile_table.append(tile1)
+
+    # tile 1 is all read
+    for i in range(8):
+        for j in range(8):
+            tile1[i][j][1] = 1
+
+    # # tile 1 is all brown
+    # for i in range(8):
+    #     for j in range(8):
+    #         tile1[i][j][0] = 1
+
+    for row in range(ntile_row):
+        for col in range(ntile_column):
+            color = color_arr[row][col]
+            if color[3] != 0.0:
+                tile_bg_map[row][col] = 1
+            else:
+                tile_bg_map[row][col] = 0
+
+
+    with open("assets/runtime_bg_textwin","wb") as f:
+        ntiles = 2
+        magic = "bkt1"
+        size = int(1 + 16 * ntiles + 60 * 64 + 1)
+        f.write(string_to_bytes(magic))
+        f.write(int_to_bytes(size,4))
+        f.write(int_to_bytes(ntiles,1))
+
+        for i in range(ntiles):
+            tile = background_tile_table[i]
+            bit = tile_to_bytes(tile)
+            bit0_bytes = bytearray(bit[0])
+            #print(bit0_bytes)
+            bit1_bytes = bytearray(bit[1])
+
+            f.write(bit0_bytes)
+            f.write(bit1_bytes)
+
+        tile_info = np.zeros((60,64),dtype=np.uint8)
+        for row in range(60):
+            row_reverse = 59 - row
+            tile_info[row] = tile_bg_map[row_reverse]
+
+    
+        tile_idx_bytes = bytearray(tile_info)
+        f.write(tile_idx_bytes)
+
+        pal_idx = 0
+        f.write(int_to_bytes(pal_idx,1))
 
 if __name__ == "__main__":
-    color_palette,background_tile_table,tile_bg_map,solid =  process_background()
+    #color_palette,background_tile_table,tile_bg_map,solid =  process_background()
     palette_table,tile_table,idx_to_palette_table,type_table = process_all_sprites()
+    process_text_bg(palette_table[0])
     #generate_sprites_runtime(palette_table,tile_table,idx_to_palette_table,type_table)
-    generate_palettes_and_tiles([color_palette,background_tile_table,tile_bg_map,solid],[palette_table,tile_table,idx_to_palette_table,type_table])
+    #generate_palettes_and_tiles([color_palette,background_tile_table,tile_bg_map,solid],[palette_table,tile_table,idx_to_palette_table,type_table])
